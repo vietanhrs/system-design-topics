@@ -1,0 +1,24 @@
+{
+  "name": "system-design-topics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive system design interview workbook for product feature architecture practice",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter workbook-hub dev",
+    "build": "bun run --filter '*' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "bun run --filter '*' lint",
+    "preview": "bun run --filter workbook-hub preview"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
+
