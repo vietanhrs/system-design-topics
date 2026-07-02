@@ -515,7 +515,7 @@ h3 {
 
 .detail {
   display: grid;
-  gap: 0;
+  gap: 8px;
 }
 
 .detail-header {
@@ -691,7 +691,7 @@ h3 {
 .split-panel {
   display: grid;
   grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.1fr);
-  gap: 0;
+  gap: 8px;
 }
 
 .diagram {
