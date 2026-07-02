@@ -3,6 +3,7 @@ export type Priority = 'P0' | 'P1' | 'P2';
 export interface ExampleSection {
   scenario: string;
   architecture: string[];
+  diagram: string[][];
   flow: string[];
   tradeoffs: string[];
   failureModes: string[];
@@ -42,4 +43,3 @@ export interface WorkbookContent {
   repoUrl?: string;
   levels: Level[];
 }
-

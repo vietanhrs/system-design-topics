@@ -56,13 +56,7 @@ function iconForLevel(order: number) {
   return icons[(order - 1) % icons.length];
 }
 
-function Diagram() {
-  const rows = [
-    ['Client', 'API/BFF', 'Feature Service'],
-    ['Cache', 'Primary DB', 'Search/Graph Index'],
-    ['Queue/Stream', 'Workers', 'Observability'],
-  ];
-
+function Diagram({ rows }: { rows: string[][] }) {
   return (
     <div className="diagram" aria-label="Architecture pattern diagram">
       {rows.map((row, rowIndex) => (
@@ -460,7 +454,7 @@ function DetailPage({
               <h3>Failure modes</h3>
               <ul>{item.subsection.example.failureModes.map((point) => <li key={point}>{point}</li>)}</ul>
             </div>
-            <Diagram />
+            <Diagram rows={item.subsection.example.diagram} />
           </section>
         )}
 
@@ -532,4 +526,3 @@ export function WorkbookApp({ content }: { content: WorkbookContent }) {
     </div>
   );
 }
-

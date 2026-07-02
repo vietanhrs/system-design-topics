@@ -3,6 +3,7 @@ import type { Level, Priority, Subsection, WorkbookContent } from '@system-desig
 type SubInput = Omit<Subsection, 'example' | 'exercise'> & {
   scenario: string;
   architecture: string[];
+  diagram?: string[][];
   flow: string[];
   tradeoffs: string[];
   failureModes: string[];
@@ -11,10 +12,344 @@ type SubInput = Omit<Subsection, 'example' | 'exercise'> & {
   expected: string[];
 };
 
+const fallbackDiagram = [
+  ['Client', 'API/BFF', 'Feature Service'],
+  ['Cache', 'Primary DB', 'Search/Graph Index'],
+  ['Queue/Stream', 'Workers', 'Observability'],
+];
+
+const diagrams: Record<string, string[][]> = {
+  'problem-framing': [
+    ['Prompt', 'Users', 'Core actions'],
+    ['MVP scope', 'NFR targets', 'Out of scope'],
+    ['APIs', 'Data flows', 'Risks'],
+  ],
+  'requirements-and-nfrs': [
+    ['Product verbs', 'Functional requirements', 'APIs/events'],
+    ['Latency', 'Freshness', 'Availability'],
+    ['Privacy', 'Abuse', 'Observability'],
+  ],
+  'back-of-envelope-estimates': [
+    ['MAU/DAU', 'Actions/user', 'Average QPS'],
+    ['Peak factor', 'Serving capacity', 'Cache size'],
+    ['Mutation rate', 'Queue throughput', 'Worker pool'],
+  ],
+  'api-contracts': [
+    ['Client', 'Gateway', 'Suggestions API'],
+    ['Cursor contract', 'Read model', 'Profile hydration'],
+    ['Idempotent mutation', 'Source DB', 'Domain event'],
+  ],
+  'answer-pacing': [
+    ['Requirements', 'Estimates', 'API'],
+    ['Data model', 'Flows', 'Bottleneck'],
+    ['Trade-offs', 'Failures', 'Follow-up'],
+  ],
+  'sync-request-path': [
+    ['Browser/App', 'CDN/Edge', 'API Gateway'],
+    ['BFF/Product API', 'Service logic', 'Redis cache'],
+    ['Primary DB/read model', 'Downstream service', 'Tracing/logs'],
+  ],
+  'async-pipelines': [
+    ['Source service', 'Transactional outbox', 'Event broker'],
+    ['Kafka/Kinesis topic', 'Worker group', 'Derived store'],
+    ['Retry queue', 'DLQ', 'Lag dashboard'],
+  ],
+  'cache-hierarchy': [
+    ['Browser cache', 'CDN', 'Gateway cache'],
+    ['Redis object cache', 'Read model store', 'Primary DB'],
+    ['Invalidation event', 'Versioned key', 'Final auth check'],
+  ],
+  'partitioning-and-sharding': [
+    ['Access pattern', 'Partition key', 'Shard router'],
+    ['Shard A', 'Shard B', 'Shard C'],
+    ['Hot-key detector', 'Salting/caps', 'Rebalance job'],
+  ],
+  'search-index-read-models': [
+    ['Primary DB', 'Outbox/CDC', 'Stream'],
+    ['Indexer worker', 'OpenSearch/Elasticsearch', 'Read API'],
+    ['Snapshot', 'Backfill/replay', 'Version cutover'],
+  ],
+  'entity-modeling': [
+    ['User/Profile', 'ConnectionRequest', 'ConnectionEdge'],
+    ['Block', 'Dismissal', 'Suggestion'],
+    ['Owner service', 'Invariant', 'Domain event'],
+  ],
+  'database-choice': [
+    ['Access pattern', 'Consistency need', 'Store choice'],
+    ['Postgres/MySQL', 'KV/Wide-column', 'Graph store'],
+    ['Redis', 'Search index', 'Object storage'],
+  ],
+  'transactions-idempotency-outbox': [
+    ['Client retry', 'Idempotency key', 'DB transaction'],
+    ['State row', 'Outbox row', 'Commit'],
+    ['Relay', 'Broker', 'Idempotent consumer'],
+  ],
+  'cdc-event-sourcing': [
+    ['Source DB log', 'CDC connector', 'Event stream'],
+    ['Consumer A', 'Consumer B', 'Read models'],
+    ['Snapshot', 'Replay', 'Schema registry'],
+  ],
+  'consistency-models': [
+    ['Operation', 'Correctness need', 'Consistency choice'],
+    ['Strong write', 'Read-your-writes', 'Eventual read model'],
+    ['Version check', 'Conflict rule', 'Repair job'],
+  ],
+  'social-graph-model': [
+    ['User vertex', 'Connection edge', 'Block edge'],
+    ['Adjacency store', 'Canonical edge', 'Privacy policy'],
+    ['Graph event', 'Candidate job', 'Suggestions store'],
+  ],
+  'mutual-candidate-generation': [
+    ['User neighbors', 'Two-hop expansion', 'Candidate set'],
+    ['Dedup/filter', 'Mutual count', 'Feature vector'],
+    ['Fan-out caps', 'Queue workers', 'Read model'],
+  ],
+  'ranking-feature-store': [
+    ['Candidate', 'Feature fetch', 'Ranker'],
+    ['Graph features', 'Profile features', 'Behavior features'],
+    ['Model version', 'Score', 'Explanation'],
+  ],
+  'serving-suggestions': [
+    ['Client', 'Suggestions API', 'Ranked read model'],
+    ['Cache', 'Privacy filter', 'Profile hydration'],
+    ['Impression event', 'Analytics', 'Freshness monitor'],
+  ],
+  'privacy-safety-filters': [
+    ['Candidate pool', 'Block/private filter', 'Policy filter'],
+    ['Safety classifier', 'Ranker', 'Final serve filter'],
+    ['Audit log', 'Appeal/review', 'Abuse metrics'],
+  ],
+  'full-case-study': [
+    ['Requirements', 'Graph source', 'Events'],
+    ['Candidate generation', 'Ranking', 'Suggestions store'],
+    ['API/cache', 'Privacy checks', 'Metrics/failures'],
+  ],
+  'notification-system': [
+    ['Domain event', 'Preference filter', 'Dedupe'],
+    ['Fan-out queue', 'Provider adapter', 'Push/email/SMS'],
+    ['Retry/DLQ', 'Delivery state', 'Analytics'],
+  ],
+  'chat-messaging': [
+    ['Sender', 'Message API', 'Conversation shard'],
+    ['Message store', 'Realtime fan-out', 'Recipient devices'],
+    ['Offline inbox', 'Read receipts', 'Push notification'],
+  ],
+  'news-feed': [
+    ['Creator event', 'Fan-out workers', 'Timeline store'],
+    ['Ranker', 'Feed API', 'Client cursor'],
+    ['Freshness queue', 'Cache', 'Engagement events'],
+  ],
+  'search-autocomplete': [
+    ['Query prefix', 'Autocomplete API', 'Prefix index'],
+    ['Candidate retrieval', 'Ranker', 'Personalization'],
+    ['Index builder', 'Freshness stream', 'Metrics'],
+  ],
+  'rate-limiter': [
+    ['Request', 'Limiter middleware', 'Counter store'],
+    ['Token bucket', 'Sliding window', 'Policy decision'],
+    ['Allow/deny', 'Audit log', 'Abuse dashboard'],
+  ],
+  'media-upload': [
+    ['Client', 'Upload API', 'Pre-signed URL'],
+    ['Object storage', 'Scan queue', 'Media workers'],
+    ['CDN', 'Metadata DB', 'Processing status'],
+  ],
+  'slo-latency-budgets': [
+    ['Product promise', 'SLO', 'SLI'],
+    ['Latency budget', 'Error budget', 'Alert policy'],
+    ['Dashboard', 'Incident review', 'Architecture change'],
+  ],
+  'load-balancing-autoscaling-backpressure': [
+    ['Load balancer', 'Service pool', 'Autoscaler'],
+    ['Queue depth', 'Backpressure', 'Circuit breaker'],
+    ['Rate limit', 'Shedding', 'Recovery'],
+  ],
+  'graceful-degradation': [
+    ['Dependency fails', 'Fallback path', 'Core feature'],
+    ['Stale cache', 'Simpler ranking', 'Partial response'],
+    ['User signal', 'Alert', 'Repair'],
+  ],
+  observability: [
+    ['Request ID', 'Structured logs', 'Metrics'],
+    ['Trace spans', 'Business events', 'Dashboards'],
+    ['Alert', 'Runbook', 'Postmortem'],
+  ],
+  'multi-region-dr': [
+    ['Region A', 'Replication stream', 'Region B'],
+    ['Global router', 'Failover policy', 'Health checks'],
+    ['RPO/RTO', 'Conflict handling', 'DR drill'],
+  ],
+  'auth-sessions': [
+    ['Login', 'Identity provider', 'Session/token'],
+    ['Gateway validation', 'Service identity', 'Device state'],
+    ['Refresh/revoke', 'Audit log', 'Risk engine'],
+  ],
+  'authorization-acl': [
+    ['Actor', 'Resource', 'Policy engine'],
+    ['Relationship graph', 'ACL/role store', 'Decision cache'],
+    ['Allow/deny', 'Audit log', 'Policy tests'],
+  ],
+  'pii-data-handling': [
+    ['PII collection', 'Classification', 'Encrypted store'],
+    ['Access control', 'Redaction', 'Retention job'],
+    ['Deletion request', 'Tombstone', 'Audit evidence'],
+  ],
+  'abuse-spam-controls': [
+    ['User action', 'Risk signals', 'Rules/ML scorer'],
+    ['Throttle/challenge', 'Review queue', 'Enforcement'],
+    ['Feedback loop', 'Appeals', 'Abuse metrics'],
+  ],
+  'secure-apis-secrets': [
+    ['Client/API', 'Validation', 'AuthN/AuthZ'],
+    ['Secrets manager', 'Service credentials', 'Encrypted data'],
+    ['Rotation', 'Least privilege', 'Security logs'],
+  ],
+  'master-answer-template': [
+    ['Clarify', 'Estimate', 'Contract'],
+    ['Model', 'Architecture', 'Scale'],
+    ['Reliability', 'Security', 'Trade-offs'],
+  ],
+  'system-design-checklist': [
+    ['Requirements', 'NFRs', 'APIs'],
+    ['Data', 'Flows', 'Bottlenecks'],
+    ['Failures', 'Security', 'Observability'],
+  ],
+  'whiteboard-patterns': [
+    ['Online path', 'Async path', 'Read model'],
+    ['Cache', 'Index', 'Worker'],
+    ['Failure boundary', 'Metrics', 'Follow-up'],
+  ],
+  'follow-up-questions': [
+    ['Interviewer asks', 'Clarify axis', 'Deepen subsystem'],
+    ['Scale', 'Consistency', 'Privacy'],
+    ['Incident', 'Migration', 'Cost'],
+  ],
+  'practice-rubric': [
+    ['Mock prompt', 'Timed answer', 'Score rubric'],
+    ['Structure', 'Correctness', 'Depth'],
+    ['Feedback', 'Retry', 'Track progress'],
+  ],
+};
+
+const technologyNotes: Record<string, string[]> = {
+  'problem-framing': [
+    'When the prompt is broad, ground assumptions with concrete components you may later use: API gateway, primary store, cache, queue, search index, stream processor, observability stack, and policy service. This keeps the framing connected to implementation without jumping to technology too early.',
+  ],
+  'requirements-and-nfrs': [
+    'Map each NFR to a practical mechanism: Redis/CDN for latency, Kafka/SQS/Kinesis for async freshness, PostgreSQL transactions for invariants, OpenTelemetry/Datadog/Grafana for observability, and policy engines or service checks for privacy.',
+  ],
+  'back-of-envelope-estimates': [
+    'Use the estimates to choose families of technology. Hundreds of QPS may fit one relational cluster; tens of thousands of QPS often require cache/read models; large fan-out points to streams and worker pools; large text search points to OpenSearch/Elasticsearch.',
+  ],
+  'api-contracts': [
+    'In real systems, API contracts are often OpenAPI/Swagger or protobuf/gRPC schemas. Include cursor shape, idempotency-key semantics, retryable status codes, rate-limit headers, and internal request IDs so clients and services can evolve independently.',
+  ],
+  'answer-pacing': [
+    'Use the diagram as a navigation tool: first draw the online path, then add async/event paths, then mark storage ownership and failure boundaries. Interviewers can then choose where to go deeper: cache, queue, consistency, privacy, or scaling.',
+  ],
+  'entity-modeling': [
+    'Turn entities into ownership and storage decisions: transactional entities often live in PostgreSQL/MySQL, high-QPS adjacency or timeline data in DynamoDB/Cassandra/Bigtable, search documents in OpenSearch/Elasticsearch, and immutable media in object storage.',
+  ],
+  'database-choice': [
+    'A strong answer names the operational cost of each store: relational migrations and failover, DynamoDB/Cassandra partition design, Redis memory pressure and eviction, OpenSearch shard/index tuning, object storage lifecycle policies, and graph database traversal limits.',
+  ],
+  'transactions-idempotency-outbox': [
+    'Common implementation pieces are unique constraints, idempotency tables, transactional outbox tables, Debezium/CDC or a polling relay, Kafka/SNS/SQS/Pub/Sub for delivery, and consumer-side dedupe keyed by event_id or aggregate version.',
+  ],
+  'cdc-event-sourcing': [
+    'Use Debezium, DynamoDB Streams, MySQL binlog, Postgres logical replication, Kafka Connect, or cloud CDC services when you need committed database changes to feed indexes and read models. Full event sourcing is rarer and should be justified by audit/replay needs.',
+  ],
+  'consistency-models': [
+    'Tie consistency choices to mechanisms: database transactions and unique constraints for strong invariants, leader reads or session tokens for read-your-writes, event streams for eventual read models, and compare-and-swap/version columns for conflict prevention.',
+  ],
+  'social-graph-model': [
+    'At scale, social graph storage is often adjacency lists in a wide-column/KV store plus relational tables for workflow invariants. Dedicated graph databases can help exploration, but interviews should still address partitioning, hot nodes, and traversal caps.',
+  ],
+  'mutual-candidate-generation': [
+    'Two-hop candidate generation is usually an offline or nearline job using Kafka/Spark/Flink/Beam or queue workers, with caps for high-degree nodes and sampled neighbor sets to control fan-out cost.',
+  ],
+  'ranking-feature-store': [
+    'Ranking stacks commonly combine offline feature stores, online feature stores such as Redis/DynamoDB/Cassandra, model serving via a service endpoint, and experiment frameworks for model/version rollout. Keep explanations safe and avoid exposing sensitive features.',
+  ],
+  'serving-suggestions': [
+    'Serving usually combines Redis for hot ranked pages, a viewer-keyed read model for durable fallback, batched profile hydration, final block/privacy checks, and impression events for analytics and model feedback.',
+  ],
+  'privacy-safety-filters': [
+    'Practical filter systems use policy services, relationship/ACL stores, block lists, risk classifiers, deny lists, and audit logs. Safety filters should run before ranking when possible and again at final serving for stale derived data.',
+  ],
+  'full-case-study': [
+    'A complete production answer should name both source and derived technology: relational request workflow, adjacency graph store, Kafka/Kinesis/Pub/Sub events, Redis cache, suggestions read model, OpenSearch for people search, and dashboards for freshness and quality.',
+  ],
+  'notification-system': [
+    'Common technologies include Kafka/SQS/Pub/Sub for fan-out, Redis or relational stores for dedupe and preferences, APNs/FCM/email/SMS providers for delivery, and DLQs plus provider-specific retry policies.',
+  ],
+  'chat-messaging': [
+    'Messaging systems often use WebSockets or gRPC streams for realtime delivery, a durable message store such as Cassandra/DynamoDB/PostgreSQL, Redis presence, push notification providers, and per-conversation or per-user partitioning for ordering.',
+  ],
+  'news-feed': [
+    'Feeds usually combine fan-out-on-write workers, timeline stores in Cassandra/DynamoDB/Redis Sorted Sets, ranking services, object/profile hydration, and engagement event streams. The key decision is how much work happens at write time vs read time.',
+  ],
+  'search-autocomplete': [
+    'Autocomplete commonly uses prefix tries/FSTs, OpenSearch/Elasticsearch completion suggesters, Redis for hot prefixes, typo-tolerant candidate generation, and separate offline jobs for popularity and personalization signals.',
+  ],
+  'rate-limiter': [
+    'Distributed rate limiters are commonly built with Redis atomic counters/Lua scripts, Envoy/Kong plugins, token bucket or sliding-window algorithms, and separate policy tiers for user, IP, device, API key, and tenant limits.',
+  ],
+  'media-upload': [
+    'Production upload flows usually use pre-signed S3/GCS URLs, multipart upload, antivirus scanning queues, transcoding workers, metadata DB rows, CDN delivery, and lifecycle policies for temporary or deleted objects.',
+  ],
+  'slo-latency-budgets': [
+    'SLO work becomes concrete through Prometheus/Grafana/Datadog/New Relic metrics, OpenTelemetry traces, alert policies tied to burn rate, and dashboards that separate user-visible latency from background freshness.',
+  ],
+  'load-balancing-autoscaling-backpressure': [
+    'Practical controls include L4/L7 load balancers, Kubernetes HPA/KEDA, queue-depth scaling, Envoy circuit breakers, bulkheads, rate limiting, bounded worker pools, and load shedding for optional work.',
+  ],
+  'graceful-degradation': [
+    'Design fallback paths with concrete mechanics: stale Redis/read-model responses, feature flags, simpler ranking models, dependency timeouts, partial responses, and user-safe empty states for optional modules.',
+  ],
+  observability: [
+    'A strong observability answer combines structured logs, metrics, traces, domain events, dashboards, alerts, and runbooks. Use OpenTelemetry for trace propagation and include business labels such as cache_hit, model_version, queue_lag, and freshness_age.',
+  ],
+  'multi-region-dr': [
+    'Real multi-region designs involve Route 53/Cloudflare/global load balancers, database replication, object-storage replication, Kafka MirrorMaker/Pub/Sub replication, failover automation, RPO/RTO targets, and regular DR drills.',
+  ],
+  'auth-sessions': [
+    'Auth implementations often use OAuth2/OIDC providers, JWT or opaque session tokens, refresh-token rotation, device/session tables, Redis token revocation lists, mTLS/service identity, and audit logs for sensitive account events.',
+  ],
+  'authorization-acl': [
+    'Authorization can use RBAC, ABAC, relationship-based access control, policy engines such as OPA/Cedar, ACL tables, and decision caches. The serving path should fail closed when policy data is unavailable for sensitive resources.',
+  ],
+  'pii-data-handling': [
+    'PII handling uses classification, encryption at rest, field-level encryption for sensitive fields, KMS-managed keys, redacted logs, retention jobs, deletion tombstones, and access audits. Keep PII out of analytics and traces unless explicitly minimized.',
+  ],
+  'abuse-spam-controls': [
+    'Abuse systems combine rate limits, reputation stores, device/IP signals, graph anomaly detection, ML/rules engines, challenge flows, manual review tools, enforcement state, and feedback loops from reports and appeals.',
+  ],
+  'secure-apis-secrets': [
+    'Secure API designs should mention input validation, least-privilege service credentials, KMS/Secrets Manager/Vault, TLS/mTLS, secret rotation, scoped tokens, audit logs, and dependency scanning for supply-chain risk.',
+  ],
+  'master-answer-template': [
+    'Use concrete technology only after the shape is clear: source DB, cache, queue/stream, worker pool, read model, search index, object storage, observability, and policy/security services. The template helps avoid naming tools without purpose.',
+  ],
+  'system-design-checklist': [
+    'Run a technology sanity pass before finishing: source of truth, cache key/TTL, async broker, read model/index, partition key, idempotency key, monitoring metric, failure fallback, and privacy/security boundary.',
+  ],
+  'whiteboard-patterns': [
+    'Most diagrams can be assembled from a small set of patterns: online request path, async event pipeline, source-to-read-model projection, cache hierarchy, sharded storage, multi-region failover, and policy enforcement boundary.',
+  ],
+  'follow-up-questions': [
+    'For follow-ups, translate the question into one axis and one mechanism: scale means partition/cache/queue; consistency means transactions/versioning; freshness means stream lag; privacy means policy checks; incidents mean fallback and observability.',
+  ],
+  'practice-rubric': [
+    'When scoring practice, reward concrete production anchors: named storage ownership, API contracts, event schemas, partition keys, cache invalidation, retry/idempotency behavior, diagrams, metrics, and one explicit trade-off per major component.',
+  ],
+};
+
 function sub(input: SubInput): Subsection {
   const {
     scenario,
     architecture,
+    diagram,
     flow,
     tradeoffs,
     failureModes,
@@ -26,7 +361,8 @@ function sub(input: SubInput): Subsection {
 
   return {
     ...rest,
-    example: { scenario, architecture, flow, tradeoffs, failureModes },
+    theory: [...rest.theory, ...(technologyNotes[rest.id] ?? [])],
+    example: { scenario, architecture, diagram: diagram ?? diagrams[rest.id] ?? fallbackDiagram, flow, tradeoffs, failureModes },
     exercise: { prompt, tasks, expected },
   };
 }
@@ -342,16 +678,19 @@ const levels: Level[] = [
         theory: [
           'The synchronous path is the part users wait for. It usually contains client, edge/CDN, API gateway, BFF or product API, service logic, cache, and one or more stores.',
           'A request path should be boring and bounded. It can hydrate data, enforce privacy, and read precomputed state, but expensive graph traversal, image processing, or global ranking belongs in async jobs.',
+          'Common real-world components are CloudFront/Fastly/Cloudflare at the edge, Kong/Envoy/API Gateway for routing and auth, a BFF for product-specific response shaping, Redis or Memcached for hot objects, and PostgreSQL/MySQL/DynamoDB/Cassandra/OpenSearch depending on the read shape.',
           'Budget the path. If p95 is 200 ms, each hop gets a slice: gateway, service, cache, database, downstream calls, serialization, and network.',
+          'Treat downstream calls as a tail-latency risk. Batch where possible, set timeouts shorter than the user-facing deadline, use circuit breakers for optional dependencies, and return partial data when the core product action can still succeed.',
           'Use request IDs, structured logs, metrics, and distributed traces from the first design. Debuggability is not optional in production architecture.',
         ],
         scenario:
           'GET /suggestions reads a precomputed ranked list from cache/store, hydrates profile snippets, applies final block/privacy checks, and returns a cursor.',
         architecture: [
-          'CDN or edge terminates TLS and can cache public static assets.',
-          'API Gateway handles auth, rate limits, validation, and request tracing.',
-          'Suggestions Service reads cache first, then read model store.',
-          'Profile Service hydration is batched or denormalized to avoid N+1 calls.',
+          'Cloudflare/Fastly/CloudFront terminates TLS, serves static assets, and applies coarse bot protection.',
+          'Kong/Envoy/API Gateway handles JWT/session validation, rate limits, schema validation, routing, and request tracing.',
+          'Suggestions API/BFF reads Redis first, then a viewer-keyed read model such as DynamoDB/Cassandra/PostgreSQL partitioned by viewer_id.',
+          'Profile snippets are denormalized into the suggestions read model or hydrated through a batched Profile Service call to avoid N+1 fan-out.',
+          'OpenTelemetry traces, RED metrics, and structured logs carry request_id, viewer_id hash, cache status, and downstream latency.',
         ],
         flow: [
           'Client requests a page of suggestions with viewer auth and cursor.',
@@ -388,16 +727,20 @@ const levels: Level[] = [
         theory: [
           'Async pipelines are the backbone of scalable product systems. A connection acceptance event can update graph indexes, suggestions, notifications, analytics, and search without blocking the accept request.',
           'Choose the primitive by need. A simple queue is enough for background jobs; a durable log or stream is better when multiple consumers need ordered replayable events.',
+          'Common choices are SQS/RabbitMQ/Sidekiq/BullMQ for job queues, Kafka/Kinesis/Pub/Sub/Pulsar for durable event streams, and Celery/Temporal/Airflow for workflow-style jobs. The interview signal is explaining ordering, replay, retention, and consumer isolation.',
           'Retries create duplicates, so consumers need idempotency keys, deterministic writes, or version checks. Exactly-once is rare in practice; design for at-least-once delivery.',
+          'Use the transactional outbox pattern when the event must correspond to a committed database change. The service writes business state and an outbox row in one transaction; a relay publishes later so the system avoids unsafe DB-plus-broker dual writes.',
           'Lag is a product metric. If candidate generation is 30 minutes behind, suggestions may be technically served but product freshness is broken.',
+          'Every production pipeline needs a dead-letter queue, replay story, schema/version compatibility, consumer dashboards, and a plan for poison messages that would otherwise block an ordered partition.',
         ],
         scenario:
           'ConnectionAccepted events are appended to a stream. Candidate workers update two-hop suggestions; notification workers create "new connection" notifications; analytics consumers update metrics.',
         architecture: [
           'Connection Service writes source state and an outbox row in the same transaction.',
-          'Outbox relay publishes domain events to a stream.',
-          'Independent workers consume graph, notification, and analytics topics.',
-          'Dead-letter queues and lag alarms expose stuck or poison messages.',
+          'Outbox relay publishes domain events to Kafka/Kinesis/Pub/Sub with event_id, aggregate_id, version, occurred_at, and schema_version.',
+          'Independent consumer groups update graph candidates, notifications, search indexes, analytics, and ML feature stores without blocking each other.',
+          'Workers write idempotently using event_id dedupe tables, deterministic upserts, or monotonic aggregate versions.',
+          'Dead-letter queues, replay tooling, and lag alarms expose stuck consumers, poison messages, and freshness breaches.',
         ],
         flow: [
           'User accepts a connection request.',
@@ -444,16 +787,21 @@ const levels: Level[] = [
         theory: [
           'Caching improves latency and cost by avoiding repeated work. In system design, explain what is cached, where it is cached, how long it lives, and what happens when it is stale.',
           'Cache levels differ. CDN is best for public assets; application cache is good for hot read models; object cache can store profile snippets; client cache improves navigation.',
+          'Typical technologies are browser HTTP cache, CDN edge cache, reverse proxies such as Varnish/Nginx, Redis or Memcached for server-side hot data, in-process LRU caches for tiny stable dictionaries, and database buffer/cache layers you usually do not control directly.',
           'Invalidation is easier with immutable keys and versioned data. Mutable personalized lists are harder; use TTLs, event-driven invalidation, or final safety filters.',
+          'Choose a cache pattern deliberately: cache-aside for most API reads, write-through when the cache must update with writes, write-behind when lower write latency matters, and refresh-ahead for expensive hot keys. Each pattern changes failure behavior.',
+          'Protect hot keys with request coalescing/singleflight, soft TTL plus background refresh, jittered expiry, and fallback limits. Otherwise a cache miss storm can take down the database exactly when traffic is highest.',
           'Never let cache bypass correctness boundaries. Blocks, authorization, deleted accounts, and private content must be checked on the serving path or invalidated quickly.',
         ],
         scenario:
           'Suggestion pages use Redis for ranked candidate IDs with a short TTL, profile snippets cached by profile version, and final privacy checks before returning results.',
         architecture: [
           'Client uses HTTP cache for static bundle and short memory cache for current list.',
-          'API uses Redis keyed by viewer ID, model version, and cursor bucket.',
-          'Profile cache keys include profile version or updated_at.',
-          'Connection/block events invalidate viewer and candidate related keys.',
+          'CDN uses immutable hashed asset keys and short TTLs only for safe public API responses.',
+          'API uses Redis cache-aside keyed by viewer ID, model version, cursor bucket, and locale/experiment context.',
+          'Profile cache keys include profile version or updated_at so stale snippets naturally fall away after profile edits.',
+          'Connection/block/privacy/delete events invalidate viewer and candidate related keys, while the serving path still performs final authorization checks.',
+          'Soft TTL, jitter, and singleflight prevent stampedes when a high-traffic suggestion page expires.',
         ],
         flow: [
           'Read cache for viewer suggestions.',
@@ -500,16 +848,21 @@ const levels: Level[] = [
         theory: [
           'Partitioning splits data so storage and traffic can scale horizontally. The partition key determines which queries are cheap and which ones need scatter-gather.',
           'For social graph edges, common queries are "neighbors of user" and "edge between A and B". Store by user ID for adjacency reads, and keep a canonical edge key for existence checks.',
+          'Partitioning can be hash-based for even distribution, range-based for ordered scans, geo-based for locality, tenant-based for isolation, or composite when access patterns require multiple dimensions. The key should come from the dominant query, not from entity names.',
+          'Common storage systems expose these choices differently: Cassandra/DynamoDB use partition keys heavily, PostgreSQL/MySQL need explicit sharding or partition tables at large scale, Elasticsearch/OpenSearch split indexes into shards, and Kafka partitions events by key for ordering and consumer scaling.',
           'Hot keys matter more than averages. Users with millions of followers or connections can overload a single partition or make two-hop expansion explode.',
+          'Mitigations include salting hot keys, splitting large adjacency lists into buckets, caching hot reads, capping fan-out, treating celebrity/high-degree users with separate pipelines, and moving analytics to offline systems instead of online scatter-gather.',
           'Sharding introduces operational complexity: rebalancing, cross-shard transactions, secondary indexes, and uneven traffic. Mention how you handle growth.',
+          'A good design separates source partitioning from read-model partitioning. The graph source may be keyed by user_id for adjacency, while suggestions are keyed by viewer_id and search indexes are sharded by document ID or routing key.',
         ],
         scenario:
           'Connection edges are stored in adjacency partitions by user ID. A separate canonical edge table keyed by min(userA,userB):max(userA,userB) supports idempotent existence checks.',
         architecture: [
-          'Graph adjacency store partitioned by user_id.',
+          'Graph adjacency store partitioned by user_id in Cassandra/DynamoDB/wide-column storage for fast neighbor reads.',
           'Canonical edge store for unique pair constraints.',
           'High-degree users have capped expansion and sampled neighbor sets.',
-          'Derived suggestions store partitioned by viewer_id for fast reads.',
+          'Derived suggestions store partitioned by viewer_id for fast serving reads.',
+          'Shard router, hot-key detector, and background rebalancing jobs track uneven traffic and move/split partitions safely.',
         ],
         flow: [
           'Connection write updates canonical edge and both adjacency lists.',
@@ -551,7 +904,10 @@ const levels: Level[] = [
         theory: [
           'Many systems keep a normalized source store and one or more derived read models. This is not duplication by accident; it is deliberate denormalization for query shape.',
           'A search index supports text queries, ranking, filters, and autocomplete. A suggestions store supports viewer-keyed ranked lists. A feed store supports timeline reads.',
+          'Common read-model technologies include Elasticsearch/OpenSearch/Solr for search, Redis Sorted Sets for small hot leaderboards or ranked lists, DynamoDB/Cassandra for high-QPS key-value reads, materialized views in PostgreSQL for moderate scale, and ClickHouse/BigQuery/Snowflake for analytics-oriented reads.',
           'Derived stores need lifecycle thinking: backfill, rebuild, replay from events, shadow version, cutover, and rollback.',
+          'The source of truth emits changes through outbox or CDC. Indexer workers transform those changes into query-shaped documents, record offsets/checkpoints, and expose freshness metrics such as indexing lag and generated_at age.',
+          'Version read models when changing schemas or ranking logic. Build v2 beside v1, shadow compare results, cut traffic gradually, and keep a rollback path until the new index has proven correctness and latency.',
           'Never let derived stores become the only place where critical truth exists unless that is an explicit event-sourcing design.',
         ],
         scenario:
@@ -559,8 +915,10 @@ const levels: Level[] = [
         architecture: [
           'Primary graph DB owns edges and block state.',
           'Event stream feeds candidate generation and ranking.',
-          'Suggestions Store is partitioned by viewer_id and versioned by model.',
-          'Rebuild jobs can recompute from graph snapshots.',
+          'Suggestions Store is partitioned by viewer_id and versioned by model/schema version.',
+          'OpenSearch/Elasticsearch owns text search documents and is rebuilt from profile events.',
+          'Rebuild jobs recompute from graph/profile snapshots plus event replay, then cut over aliases or versioned tables.',
+          'Freshness monitors compare stream offsets, generated_at age, and missing-document rates.',
         ],
         flow: [
           'Graph event arrives.',
@@ -2394,4 +2752,3 @@ export const workbook: WorkbookContent = {
 };
 
 export const allPriorities: Priority[] = ['P0', 'P1', 'P2'];
-
