@@ -513,15 +513,194 @@ const optionTables: Record<string, string> = {
 | Manual review | High-risk ambiguous cases | Operational cost |`,
 };
 
+const blockExplanations: Record<string, string> = {
+  'API Gateway': 'Authenticates, rate-limits, validates, routes requests, and attaches request metadata before traffic reaches product services.',
+  'BFF/Product API': 'Shapes product-specific responses for the UI and coordinates a bounded set of backend reads.',
+  'Browser/App': 'User-facing client that sends authenticated requests, manages local state, and renders returned data.',
+  'CDN/Edge': 'Terminates TLS, serves cacheable assets, and absorbs globally distributed traffic close to users.',
+  'Redis cache': 'Low-latency cache for hot personalized reads; correctness depends on keys, TTLs, and invalidation.',
+  'Primary DB/read model': 'Durable source or projected store that the online path can read inside the latency budget.',
+  'Downstream service': 'Dependency called by the request path; it needs timeouts, batching, and fallback behavior.',
+  'Tracing/logs': 'Correlation data for debugging latency, errors, cache hits, and downstream calls by request ID.',
+  'Source service': 'Service that owns the business write and emits a domain event after durable commit.',
+  'Transactional outbox': 'Outbox record written with business state in one DB transaction to avoid dual-write loss.',
+  'Event broker': 'Durable messaging layer that decouples producers and consumers and supports fan-out.',
+  'Kafka/Kinesis topic': 'Partitioned event stream; explain partition key, retention, ordering, consumer groups, and lag.',
+  'Worker group': 'Horizontally scalable consumers that process async work and must be idempotent under retries.',
+  'Derived store': 'Read-optimized projection built from source events; it needs rebuild, versioning, and freshness checks.',
+  'Retry queue': 'Buffer for transient failures with backoff so temporary dependency errors do not drop work.',
+  DLQ: 'Dead-letter queue for poison messages that failed retries and need triage or replay.',
+  'Lag dashboard': 'Operational view of consumer delay and product freshness age.',
+  'Browser cache': 'Client-side cache for static or safe short-lived data; private state needs strict cache controls.',
+  CDN: 'Edge cache and delivery network for public/static content or carefully scoped API responses.',
+  'Gateway cache': 'Near-entry cache for shared responses; cache keys must isolate auth and viewer context.',
+  'Redis object cache': 'Server-side object cache for hot records; it needs object versioning and invalidation.',
+  'Read model store': 'Query-shaped durable store optimized for UI reads rather than normalized writes.',
+  'Primary DB': 'Source-of-truth transactional store for invariants, indexes, backups, and write ownership.',
+  'Invalidation event': 'Signal that marks cache/read-model entries stale after writes, deletes, blocks, or privacy changes.',
+  'Versioned key': 'Cache/index key that includes schema, model, or entity version to prevent stale mixing.',
+  'Final auth check': 'Last serving-path authorization/privacy check that protects users even when derived data is stale.',
+  'Shard router': 'Routing layer that maps partition keys to physical shards and supports rebalancing.',
+  'Hot-key detector': 'Monitoring logic that finds skewed keys before one partition becomes overloaded.',
+  'Salting/caps': 'Hot-key mitigation that splits or bounds high-degree entities such as celebrity graph nodes.',
+  'Rebalance job': 'Background job that moves or splits partitions while preserving read/write correctness.',
+  'Outbox/CDC': 'Change publishing mechanism that turns committed source changes into downstream events.',
+  'Indexer worker': 'Consumer that transforms source changes into search or read-model documents.',
+  'OpenSearch/Elasticsearch': 'Search index for text, filters, ranking, and autocomplete; it is usually eventually consistent.',
+  'Read API': 'Serving API that reads a projection or index and applies final validation before responding.',
+  Snapshot: 'Consistent source capture used to backfill or rebuild derived stores.',
+  'Backfill/replay': 'Repair or migration path that rebuilds projections from snapshots and retained events.',
+  'Version cutover': 'Controlled switch from old to new read model/index with shadow validation and rollback.',
+  'Postgres/MySQL': 'Relational store for transactions, constraints, and moderate relational queries.',
+  'KV/Wide-column': 'High-scale key-partitioned store for predictable access patterns such as adjacency lists.',
+  'Graph store': 'Graph traversal storage/query layer; partitioning and hot-node limits still matter.',
+  'Search index': 'Derived index for text/ranking/filter queries; it should not become hidden source of truth.',
+  Redis: 'In-memory data store used for hot caches, counters, ephemeral state, sorted sets, or lightweight coordination.',
+  'Object storage': 'Durable blob storage for large files/media, usually paired with metadata and lifecycle policies.',
+  'Metadata DB': 'Transactional metadata store for ownership, status, references, and processing state of uploaded objects.',
+  'Counter store': 'Shared state for distributed counters such as rate limits, quotas, and sliding windows.',
+  'Idempotency key': 'Stable mutation key that lets retries return the same logical result without duplicates.',
+  'DB transaction': 'Atomic boundary for state changes and outbox writes that must commit together.',
+  'Outbox row': 'Durable event record stored beside state before asynchronous publishing.',
+  Relay: 'Publisher that reads unsent outbox rows, sends events, and records progress.',
+  Broker: 'Messaging infrastructure that stores and delivers events to consumers.',
+  'Idempotent consumer': 'Consumer that safely handles duplicate events using event IDs, versions, or deterministic upserts.',
+  'CDC connector': 'Connector that reads database logs and emits committed changes downstream.',
+  'Event stream': 'Ordered append-only log used by multiple consumers and replay jobs.',
+  'Schema registry': 'Compatibility control for event schemas so producers do not break consumers.',
+  'Strong write': 'Transactional write path for correctness-critical operations such as blocks, balances, or unique edges.',
+  'Read-your-writes': 'Guarantee that users immediately see their own recent mutation.',
+  'Eventual read model': 'Derived view that may lag source truth but improves read latency or query shape.',
+  'Version check': 'Guard that prevents stale writes or events from overwriting newer state.',
+  'Conflict rule': 'Explicit policy for racing writes, such as reject, merge, CAS, or last-writer-wins.',
+  'Repair job': 'Background reconciliation that fixes drift between source truth and derived stores.',
+  'API/cache': 'Serving layer combining API contracts with cache or read-model access.',
+  'Privacy checks': 'Controls that prevent leaking blocked, private, or unauthorized data.',
+  'Metrics/failures': 'Measurements used to detect product degradation and operational failure modes.',
+  'Access pattern': 'Concrete read, write, filter, sort, and lookup shape that drives API, index, and storage choices.',
+  'Consistency need': 'Correctness requirement that decides whether data must be strong, read-your-writes, or eventually consistent.',
+  'Store choice': 'Storage decision that maps an access pattern and consistency need to a concrete database/index/cache.',
+  'Service logic': 'Business logic that validates product rules, coordinates reads/writes, and keeps expensive work off the request path.',
+  Prompt: 'Initial interview/product request that must be converted into users, use cases, scope, and constraints.',
+  Users: 'Actors who use the system and determine access patterns, privacy rules, and success criteria.',
+  'Core actions': 'Primary user operations that become APIs, writes, reads, events, and metrics.',
+  'MVP scope': 'Smallest useful product boundary that prevents the design from expanding into unrelated systems.',
+  'NFR targets': 'Latency, availability, freshness, durability, privacy, and scale targets that drive architecture choices.',
+  'Out of scope': 'Explicitly deferred functionality that keeps the interview answer focused.',
+  APIs: 'Contracts that expose product operations while hiding internal storage and implementation details.',
+  'Data flows': 'Movement of requests, writes, events, and derived data through the system.',
+  Risks: 'Known failure, privacy, scaling, or product-quality concerns that need mitigation.',
+  'Product verbs': 'User-visible actions that should map cleanly to APIs, events, and state transitions.',
+  'Functional requirements': 'Behavior the product must support, such as create, list, dismiss, send, or search.',
+  'APIs/events': 'External commands/queries plus internal domain events produced by those operations.',
+  Latency: 'Time budget for user-visible operations, usually expressed as p95 or p99.',
+  Freshness: 'Maximum acceptable age of served data or derived read models.',
+  Availability: 'Expected uptime or successful-response target for the feature.',
+  Privacy: 'Rules that decide who may see, store, process, or infer sensitive information.',
+  Abuse: 'Misuse patterns such as spam, scraping, fraud, fake accounts, or manipulation.',
+  Observability: 'Logs, metrics, traces, and events that make production behavior diagnosable.',
+  'MAU/DAU': 'Monthly and daily active-user assumptions used to estimate traffic and storage.',
+  'Actions/user': 'Expected user activity rate used to derive reads, writes, and async work.',
+  'Average QPS': 'Baseline requests per second before applying peak factors and growth margin.',
+  'Peak factor': 'Multiplier used to size systems for busy hours rather than daily averages.',
+  'Serving capacity': 'Online capacity needed for request latency under peak traffic.',
+  'Cache size': 'Memory/storage estimate for cached objects or pages at target hit rate.',
+  'Mutation rate': 'Write/event rate that drives source database and queue capacity.',
+  'Queue throughput': 'Rate at which async workers must process messages to maintain freshness.',
+  'Worker pool': 'Scalable set of workers sized by throughput, latency, and failure recovery needs.',
+  Requirements: 'Functional and non-functional needs that constrain the architecture.',
+  Estimates: 'Back-of-envelope sizing for traffic, storage, fan-out, and bottlenecks.',
+  API: 'Public or internal contract for invoking product behavior.',
+  'Data model': 'Entities, relationships, ownership, and invariants behind the feature.',
+  Bottleneck: 'Likely scale or latency limit that deserves deeper design attention.',
+  'Trade-offs': 'Explicit choice between competing goals such as freshness, cost, simplicity, and correctness.',
+  Failures: 'Expected ways components can fail and how the product degrades or recovers.',
+  'Follow-up': 'Next subsystem to explore once the baseline architecture is clear.',
+};
+
+const blockExplainPrompts: Record<string, string> = {
+  'Browser/App': 'Client state, auth token handling, retry behavior, rendering expectation, and behavior during network failure.',
+  'CDN/Edge': 'Cacheability, TLS termination, geo latency, bot protection, invalidation, and which responses must bypass edge cache.',
+  'API Gateway': 'Auth validation, rate limits, schema validation, routing rules, request IDs, and p95 gateway overhead.',
+  'BFF/Product API': 'Response contract, downstream batching, timeout budget, partial response policy, and client-facing errors.',
+  'Redis cache': 'Key shape, TTL, invalidation event, stale-read safety, stampede protection, and memory pressure.',
+  'Primary DB/read model': 'Whether it is source or projection, partition key, freshness guarantee, indexes, and fallback on slow reads.',
+  'Downstream service': 'Timeout, retry policy, circuit breaker, bulkhead, and whether the response can degrade without it.',
+  'Tracing/logs': 'Request ID propagation, span boundaries, log fields, sampling, and how to debug tail latency.',
+  'Access pattern': 'Exact query/write shape, cardinality, QPS, sort/filter needs, and whether reads or writes dominate.',
+  'Consistency need': 'Required guarantee per operation, stale-read tolerance, conflict rule, and user-visible correctness risk.',
+  'Store choice': 'Why this engine fits the access pattern, what indexes/keys it needs, and what operational cost it adds.',
+  'Service logic': 'Product invariants, downstream calls, transaction boundaries, timeout budget, and what moves to async workers.',
+  Prompt: 'Ambiguities to clarify, assumptions to state, product boundary, and what is explicitly out of scope.',
+  Users: 'User types, permissions, traffic contribution, privacy expectations, and success criteria for each actor.',
+  'Core actions': 'API command/query, source-of-truth write, read path, event emitted, and success metric for each action.',
+  'MVP scope': 'Included flows, deferred features, dependency assumptions, and why the first version is still useful.',
+  'NFR targets': 'Numerical latency, availability, freshness, durability, retention, and privacy targets.',
+  'Out of scope': 'Deferred functionality, why it is deferred, and what future architecture hook would support it.',
+  APIs: 'Endpoint shape, idempotency, pagination, auth, error semantics, and backward compatibility.',
+  'Data flows': 'Write path, read path, async path, source of truth, derived state, and failure boundary.',
+  Risks: 'Highest-probability failure, highest-impact failure, mitigation, detection metric, and fallback.',
+  Latency: 'p50/p95/p99 target, per-hop budget, timeout policy, and what work cannot be on the sync path.',
+  Freshness: 'Allowed staleness window, generated_at tracking, queue lag threshold, and stale-serving behavior.',
+  Availability: 'SLO target, dependency criticality, fallback mode, and what partial response is acceptable.',
+  Privacy: 'Sensitive fields, authorization point, cache invalidation trigger, audit trail, and fail-closed behavior.',
+  Abuse: 'Threat model, rate limits, risk signals, enforcement action, false-positive handling, and review loop.',
+  Observability: 'Metrics, logs, traces, dashboards, alerts, and runbook owner for this component.',
+  'Postgres/MySQL': 'Transactions, unique constraints, indexes, migration/failover plan, and scale limit before sharding.',
+  'KV/Wide-column': 'Partition key, sort key, hot-key risk, query limitations, consistency mode, and rebalancing story.',
+  'Graph store': 'Traversal depth, partition strategy, high-degree node handling, and why adjacency lists are or are not enough.',
+  'Search index': 'Index schema, analyzer/ranking, refresh lag, rebuild path, and why it is not source of truth.',
+  Redis: 'Data structure choice, key naming, TTL/eviction policy, memory sizing, persistence need, and failure fallback.',
+  'Object storage': 'Bucket/key design, signed access, lifecycle cleanup, replication, consistency, and CDN delivery.',
+  'Metadata DB': 'Schema, ownership, status transitions, transaction boundary, and reconciliation with object storage.',
+  'Counter store': 'Atomic operation, windowing algorithm, TTL, hot-key handling, and behavior under partial failure.',
+  'OpenSearch/Elasticsearch': 'Document shape, shard strategy, analyzer, refresh lag, alias cutover, and backfill/rebuild plan.',
+  'Transactional outbox': 'Transaction boundary, relay publishing, exactly-once illusion, dedupe, and stuck row monitoring.',
+  'Kafka/Kinesis topic': 'Partition key, ordering scope, retention, replay, consumer lag, and schema compatibility.',
+  DLQ: 'Which errors go to DLQ, alert owner, replay procedure, and how poison messages avoid blocking healthy work.',
+};
+
+function describeBlock(label: string) {
+  if (blockExplanations[label]) return blockExplanations[label];
+  if (label.includes('API')) return `${label} defines a request/response boundary; explain auth, validation, pagination or idempotency, latency, and error behavior.`;
+  if (label.includes('cache') || label.includes('Cache')) return `${label} reduces latency or backend load; explain key design, TTL, invalidation, and stale-data safety.`;
+  if (label.includes('queue') || label.includes('Queue')) return `${label} buffers asynchronous work; explain retry policy, ordering, idempotency, and lag monitoring.`;
+  if (label.includes('event') || label.includes('Event')) return `${label} communicates a committed domain change; explain schema, producer, consumers, ordering, and replay.`;
+  if (label.includes('store') || label.includes('DB') || label.includes('model') || label.includes('Store')) return `${label} stores state for a specific access pattern; explain ownership, partition key, consistency, and rebuild path.`;
+  if (label.includes('filter') || label.includes('Policy') || label.includes('Privacy')) return `${label} enforces product, privacy, or safety constraints; explain when it runs and whether it fails open or closed.`;
+  if (label.includes('metric') || label.includes('Metric') || label.includes('Dashboard') || label.includes('Alert')) return `${label} supports operations; explain which signal it tracks, threshold, owner, and action.`;
+  if (label.includes('Rank') || label.includes('Score')) return `${label} affects ordering or prioritization; explain inputs, model/rule version, fairness, and fallback.`;
+  if (label.includes('Graph') || label.includes('edge')) return `${label} represents or processes relationship data; explain direction, partitioning, hot nodes, and privacy constraints.`;
+  return `${label} is a distinct responsibility in this design; explain its input, output, owner, scaling limit, and failure fallback.`;
+}
+
+function explainPrompt(label: string) {
+  if (blockExplainPrompts[label]) return blockExplainPrompts[label];
+  if (label === 'CDN') return 'Cache policy, purge strategy, regional latency, origin fallback, and safe handling of private responses.';
+  if (label.includes('API')) return `Request/response fields, auth context, pagination/idempotency, validation errors, and p95 latency for ${label}.`;
+  if (label.includes('cache') || label.includes('Cache') || label === 'CDN') return `Cache key, TTL, invalidation trigger, stale-read policy, and stampede protection for ${label}.`;
+  if (label.includes('queue') || label.includes('Queue') || label === 'DLQ') return `Producer, consumer group, retry/backoff, poison-message handling, idempotency key, and lag alarm for ${label}.`;
+  if (label.includes('event') || label.includes('Event') || label.includes('stream') || label.includes('Stream')) return `Event schema, ordering key, retention, replay path, consumer ownership, and compatibility rules for ${label}.`;
+  if (label.includes('DB') || label.includes('store') || label.includes('Store') || label.includes('model')) return `Source-vs-derived ownership, partition/sort key, consistency guarantee, rebuild path, and backup/restore story for ${label}.`;
+  if (label.includes('filter') || label.includes('Policy') || label.includes('Privacy') || label.includes('auth')) return `Policy inputs, fail-open/fail-closed behavior, cacheability, audit logging, and stale-data protection for ${label}.`;
+  if (label.includes('Rank') || label.includes('Score') || label.includes('features') || label.includes('Feature')) return `Feature freshness, model/rule version, online latency, explanation safety, and fallback ranking for ${label}.`;
+  if (label.includes('Graph') || label.includes('edge') || label.includes('neighbors')) return `Edge direction, uniqueness, partition key, high-degree handling, privacy rules, and update fan-out for ${label}.`;
+  if (label.includes('metric') || label.includes('Metric') || label.includes('Dashboard') || label.includes('Alert') || label.includes('logs') || label.includes('Trace')) return `Signal definition, labels/dimensions, alert threshold, owner, and incident action for ${label}.`;
+  if (label.includes('Region') || label.includes('Failover') || label.includes('RPO') || label.includes('DR')) return `Traffic routing, replication lag, RPO/RTO, conflict handling, failover trigger, and drill plan for ${label}.`;
+  if (label.includes('Upload') || label.includes('Media') || label.includes('Object storage') || label.includes('CDN')) return `Ownership, size limits, signed access, processing state, cleanup, and delivery path for ${label}.`;
+  return `Concrete inputs/outputs, service owner, latency or freshness target, scale limit, and fallback behavior for ${label}.`;
+}
+
 function textDiagram(rows: string[][]) {
   return ['```txt', ...rows.map((row) => row.join(' -> ')), '```'].join('\n');
 }
 
 function stageTable(rows: string[][]) {
+  const blocks = rows.flat();
   return [
-    '| Stage | Blocks | What to explain |',
+    '| Block | What does it do? | What to explain |',
     '|---|---|---|',
-    ...rows.map((row, index) => `| ${index + 1} | ${row.join(' -> ')} | Ownership, latency, consistency, and failure handling for this stage |`),
+    ...blocks.map((block) => `| ${block} | ${describeBlock(block)} | ${explainPrompt(block)} |`),
   ].join('\n');
 }
 
