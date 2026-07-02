@@ -404,6 +404,127 @@ const diagramFocus: Record<string, string> = {
   'follow-up-questions': 'Clarify axis',
 };
 
+const optionTables: Record<string, string> = {
+  'sync-request-path': `| Option | Use when | Trade-off |
+|---|---|---|
+| Live downstream calls | Data must be fresh per request | Higher tail latency and dependency risk |
+| Denormalized read model | Read latency matters more than perfect freshness | Stale data and rebuild complexity |
+| Redis cache-aside | Hot personalized reads repeat often | Invalidation and stampede handling needed |`,
+  'async-pipelines': `| Primitive | Best for | Watch out |
+|---|---|---|
+| Job queue | Simple background work and retries | Limited replay and multi-consumer history |
+| Durable stream | Multiple consumers, ordering, replay | More operational overhead |
+| Workflow engine | Long-running multi-step processes | More complexity than a queue for simple jobs |`,
+  'cache-hierarchy': `| Cache layer | Good for | Correctness risk |
+|---|---|---|
+| CDN/browser cache | Public or immutable assets | Unsafe for private personalized state |
+| Redis/Memcached | Hot objects and read models | Stale keys after privacy/block changes |
+| In-process cache | Tiny stable dictionaries | Inconsistent across instances |`,
+  'partitioning-and-sharding': `| Strategy | Good for | Failure mode |
+|---|---|---|
+| Hash partition | Even distribution and simple point reads | Range scans become scatter-gather |
+| Range partition | Ordered scans and time windows | Hot latest range |
+| Salting hot keys | Celebrity/high-degree users | More complex reads and merges |`,
+  'search-index-read-models': `| Read model | Query shape | Refresh model |
+|---|---|---|
+| OpenSearch/Elasticsearch | Text search, filters, autocomplete | Event-driven indexing with lag |
+| KV/wide-column table | Point reads by viewer/entity key | Async projection from source truth |
+| Redis sorted set | Small hot ranked lists | Memory cost and eviction policy |`,
+  'database-choice': `| Store | Strength | Weakness |
+|---|---|---|
+| Relational DB | Transactions, constraints, ad-hoc queries | Harder horizontal scale at high write fan-out |
+| KV/wide-column | Predictable high-QPS key access | Query flexibility is low |
+| Graph DB | Expressive traversal | Partitioning and hot-node scaling still matter |
+| Search index | Text/ranking/filter queries | Usually eventual and not source of truth |`,
+  'transactions-idempotency-outbox': `| Pattern | Solves | Cost |
+|---|---|---|
+| Idempotency key | Client retry duplicates | Stores request/mutation state |
+| Unique constraint | Natural duplicate prevention | Needs careful conflict response |
+| Transactional outbox | DB/broker dual-write loss | Relay, cleanup, and monitoring |`,
+  'consistency-models': `| Guarantee | Use for | Avoid using for |
+|---|---|---|
+| Strong consistency | Money, blocks, ownership, unique edges | Derived ranking freshness |
+| Read-your-writes | Dismiss, send request, edit profile | Global feed/recommendation freshness |
+| Eventual consistency | Suggestions, search indexes, analytics | Safety-critical authorization |`,
+  'mutual-candidate-generation': `| Generation mode | Benefit | Cost |
+|---|---|---|
+| On-read traversal | Fresh candidates | High latency and hot-node risk |
+| Nearline workers | Fresh within minutes | Queue lag and replay complexity |
+| Offline batch | Cheap large recompute | Stale between runs |`,
+  'ranking-feature-store': `| Signal family | Examples | Risk |
+|---|---|---|
+| Graph features | Mutual count, shared groups | High-degree bias |
+| Profile features | Company, school, location | Privacy leakage |
+| Behavior features | Clicks, dismissals, accepts | Feedback loops and manipulation |`,
+  'notification-system': `| Delivery mode | Good for | Risk |
+|---|---|---|
+| Push | Urgent mobile attention | Provider failure and token expiry |
+| Email | Durable async communication | Spam complaints and slow feedback |
+| In-app inbox | Guaranteed product visibility | Requires read state and storage |`,
+  'chat-messaging': `| Choice | Use when | Trade-off |
+|---|---|---|
+| Per-conversation ordering | Group chat correctness | Hot large groups |
+| Per-recipient inbox | Fast device sync | More fan-out writes |
+| WebSocket realtime | Active sessions | Connection management and fallback needed |`,
+  'news-feed': `| Fan-out strategy | Good for | Cost |
+|---|---|---|
+| Fan-out on write | Fast reads for normal users | Expensive celebrity writes |
+| Fan-out on read | Fresh ranking and fewer writes | Slower reads |
+| Hybrid | Practical social feeds | More branching logic |`,
+  'search-autocomplete': `| Technique | Strength | Trade-off |
+|---|---|---|
+| Prefix trie/FST | Very low latency prefixes | Rebuild complexity |
+| Search suggester | Ranking, filters, typo support | Index lag and shard tuning |
+| Hot-prefix cache | Cheap repeated queries | Cache invalidation and personalization limits |`,
+  'rate-limiter': `| Algorithm | Good for | Weakness |
+|---|---|---|
+| Token bucket | Bursts with average rate | Needs shared state when distributed |
+| Sliding window | Fairer recent-window limits | More storage/CPU |
+| Fixed window | Simple counters | Boundary bursts |`,
+  'media-upload': `| Upload path | Benefit | Risk |
+|---|---|---|
+| Direct-to-object-storage | Bypasses app servers for large files | Needs signed URLs and metadata reconciliation |
+| App-server proxy | Simpler auth/control | Expensive bandwidth and scaling |
+| Multipart upload | Large/resumable files | More client and cleanup complexity |`,
+  'slo-latency-budgets': `| Metric | Measures | Design impact |
+|---|---|---|
+| p95/p99 latency | User-visible speed | Forces cache, batching, and timeout choices |
+| Error budget | Reliability tolerance | Controls release and incident policy |
+| Freshness age | Async data staleness | Drives queue/worker capacity |`,
+  'load-balancing-autoscaling-backpressure': `| Control | Protects | Trade-off |
+|---|---|---|
+| Autoscaling | Sustained traffic growth | Slow reaction and cold starts |
+| Backpressure | Downstream stability | Requests wait or fail sooner |
+| Load shedding | Core availability | Optional work is dropped |`,
+  'multi-region-dr': `| Mode | Benefit | Cost |
+|---|---|---|
+| Active-passive | Simpler consistency and failover story | Idle capacity and failover delay |
+| Active-active | Lower latency and regional resilience | Conflict handling and data replication complexity |
+| Backup/restore | Cheapest baseline DR | Higher RTO/RPO |`,
+  'authorization-acl': `| Model | Good for | Cost |
+|---|---|---|
+| RBAC | Coarse roles | Weak for object-level permissions |
+| ABAC | Attribute-based policy | Harder debugging |
+| Relationship-based auth | Social graph/resource sharing | Needs graph/policy cache |`,
+  'abuse-spam-controls': `| Control | Stops | Risk |
+|---|---|---|
+| Rate limit | Simple volume abuse | False positives for power users |
+| Reputation/risk score | Repeated bad actors | Cold-start accounts |
+| Manual review | High-risk ambiguous cases | Operational cost |`,
+};
+
+function textDiagram(rows: string[][]) {
+  return ['```txt', ...rows.map((row) => row.join(' -> ')), '```'].join('\n');
+}
+
+function stageTable(rows: string[][]) {
+  return [
+    '| Stage | Blocks | What to explain |',
+    '|---|---|---|',
+    ...rows.map((row, index) => `| ${index + 1} | ${row.join(' -> ')} | Ownership, latency, consistency, and failure handling for this stage |`),
+  ].join('\n');
+}
+
 function sub(input: SubInput): Subsection {
   const {
     scenario,
@@ -420,13 +541,21 @@ function sub(input: SubInput): Subsection {
     ...rest
   } = input;
 
+  const resolvedDiagram = diagram ?? diagrams[rest.id] ?? fallbackDiagram;
+
   return {
     ...rest,
-    theory: [...rest.theory, ...(technologyNotes[rest.id] ?? [])],
+    theory: [
+      ...rest.theory,
+      textDiagram(resolvedDiagram),
+      stageTable(resolvedDiagram),
+      ...(optionTables[rest.id] ? [optionTables[rest.id]] : []),
+      ...(technologyNotes[rest.id] ?? []),
+    ],
     example: {
       scenario,
       architecture,
-      diagram: diagram ?? diagrams[rest.id] ?? fallbackDiagram,
+      diagram: resolvedDiagram,
       diagramFocus: inputDiagramFocus ?? diagramFocus[rest.id],
       diagramKind: diagramKind ?? diagramKinds[rest.id] ?? 'flow',
       flow,

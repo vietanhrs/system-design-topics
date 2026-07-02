@@ -282,6 +282,56 @@ function Diagram({ rows, kind, focus }: { rows: string[][]; kind: DiagramKind; f
   );
 }
 
+function parseMarkdownTable(block: string) {
+  const lines = block.trim().split('\n').filter(Boolean);
+  if (lines.length < 3 || !lines[0].startsWith('|') || !lines[1].includes('---')) return undefined;
+
+  const cells = (line: string) =>
+    line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim());
+
+  return {
+    headers: cells(lines[0]),
+    rows: lines.slice(2).map(cells),
+  };
+}
+
+function TheoryBlock({ block }: { block: string }) {
+  const trimmed = block.trim();
+
+  if (trimmed.startsWith('```')) {
+    const code = trimmed
+      .replace(/^```[a-zA-Z]*\n?/, '')
+      .replace(/\n?```$/, '');
+    return <pre className="theory-code"><code>{code}</code></pre>;
+  }
+
+  const table = parseMarkdownTable(trimmed);
+  if (table) {
+    return (
+      <div className="theory-table-wrap">
+        <table className="theory-table">
+          <thead>
+            <tr>{table.headers.map((header) => <th key={header}>{header}</th>)}</tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row, rowIndex) => (
+              <tr key={`${rowIndex}-${row.join('-')}`}>
+                {row.map((cell, cellIndex) => <td key={`${cellIndex}-${cell}`}>{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return <p>{block}</p>;
+}
+
 function useRoute() {
   const [route, setRoute] = useState<RouteState>(() => parseHash());
 
@@ -642,8 +692,8 @@ function DetailPage({
         {tab === 'theory' && (
           <section className="panel prose">
             <h2>Theory</h2>
-            {item.subsection.theory.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
+            {item.subsection.theory.map((block) => (
+              <TheoryBlock block={block} key={block} />
             ))}
           </section>
         )}
