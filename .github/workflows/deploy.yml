@@ -25,6 +25,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v4
         with:
           path: apps/workbook-hub/dist
@@ -38,4 +40,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
