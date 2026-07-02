@@ -209,7 +209,7 @@ button {
   height: 100vh;
   overflow: auto;
   margin: 0;
-  padding: 0;
+  padding: 8px;
 }
 
 .hero,
@@ -834,7 +834,7 @@ h3 {
     width: 100%;
     height: auto;
     min-height: 100vh;
-    padding: 0;
+    padding: 8px;
     overflow: visible;
   }
 
