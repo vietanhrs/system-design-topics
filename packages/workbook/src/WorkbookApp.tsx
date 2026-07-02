@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { readProgress, writeProgress } from './storage';
-import type { Level, Priority, Subsection, WorkbookContent } from './types';
+import type { DiagramKind, Level, Priority, Subsection, WorkbookContent } from './types';
 
 type Tab = 'theory' | 'example' | 'exercise';
 
@@ -56,50 +56,192 @@ function iconForLevel(order: number) {
   return icons[(order - 1) % icons.length];
 }
 
-function Diagram({ rows }: { rows: string[][] }) {
-  const nodes = rows.flatMap((row, rowIndex) =>
-    row.map((label, colIndex) => ({
-      id: `${rowIndex}-${colIndex}-${label}`,
-      label,
-      rowIndex,
-      colIndex,
-      step: rows.slice(0, rowIndex).reduce((sum, current) => sum + current.length, 0) + colIndex + 1,
-    })),
-  );
-  const maxCols = Math.max(...rows.map((row) => row.length), 1);
-  const maxRows = Math.max(rows.length, 1);
+interface DiagramNode {
+  id: string;
+  label: string;
+  step: number;
+  x: number;
+  y: number;
+  role?: 'center' | 'support';
+}
 
-  function point(rowIndex: number, colIndex: number) {
-    return {
-      x: ((colIndex + 0.5) / maxCols) * 100,
-      y: ((rowIndex + 0.5) / maxRows) * 100,
-    };
+interface DiagramEdge {
+  from: DiagramNode;
+  to: DiagramNode;
+  curved?: boolean;
+}
+
+function pathBetween(from: DiagramNode, to: DiagramNode, curved = false) {
+  const horizontalOffset = from.x <= to.x ? 11 : -11;
+  const verticalOffset = from.y <= to.y ? 8 : -8;
+  const startX = from.x + horizontalOffset;
+  const startY = from.y;
+  const endX = to.x - horizontalOffset;
+  const endY = to.y;
+
+  if (Math.abs(from.x - to.x) < 1) {
+    return `M ${from.x} ${from.y + verticalOffset} L ${to.x} ${to.y - verticalOffset}`;
   }
 
-  function edgePath(from: (typeof nodes)[number], to: (typeof nodes)[number]) {
-    const start = point(from.rowIndex, from.colIndex);
-    const end = point(to.rowIndex, to.colIndex);
-    const horizontalOffset = 15;
-    const verticalOffset = 7;
+  if (Math.abs(from.y - to.y) < 1) {
+    return `M ${startX} ${from.y} L ${endX} ${to.y}`;
+  }
 
-    if (from.rowIndex === to.rowIndex) {
-      return `M ${start.x + horizontalOffset} ${start.y} L ${end.x - horizontalOffset} ${end.y}`;
+  if (curved || Math.abs(from.x - to.x) > 44 || Math.abs(from.y - to.y) > 34) {
+    return `M ${startX} ${startY} C ${startX} ${startY + verticalOffset}, ${endX} ${endY - verticalOffset}, ${endX} ${endY}`;
+  }
+
+  return `M ${startX} ${startY} L ${endX} ${endY}`;
+}
+
+function flattenDiagramRows(rows: string[][]) {
+  return rows.flatMap((row) => row);
+}
+
+function buildDiagramLayout(rows: string[][], kind: DiagramKind, focus?: string) {
+  const labels = flattenDiagramRows(rows);
+  const makeNode = (label: string, index: number, x: number, y: number, role?: DiagramNode['role']) => ({
+    id: `${index}-${label}`,
+    label,
+    step: index + 1,
+    x,
+    y,
+    role,
+  });
+
+  if (kind === 'hub') {
+    const focusIndex = focus ? labels.findIndex((label) => label === focus) : -1;
+    const centerIndex = focusIndex >= 0 ? focusIndex : Math.min(4, labels.length - 1);
+    const center = makeNode(labels[centerIndex], centerIndex, 50, 50, 'center');
+    const ringPositions = [
+      [50, 12],
+      [84, 24],
+      [84, 76],
+      [50, 86],
+      [16, 76],
+      [16, 24],
+      [18, 50],
+      [82, 50],
+    ];
+    const nodes = labels.map((label, index) => {
+      if (index === centerIndex) return center;
+      const position = ringPositions[index > centerIndex ? index - 1 : index] ?? [50, 50];
+      return makeNode(label, index, position[0], position[1], 'support');
+    });
+    const edges: DiagramEdge[] = nodes
+      .filter((node) => node.id !== center.id)
+      .map((node) => ({ from: center, to: node }));
+    return { nodes, edges };
+  }
+
+  if (kind === 'cycle') {
+    const positions = [
+      [50, 12],
+      [78, 22],
+      [86, 50],
+      [78, 78],
+      [50, 88],
+      [22, 78],
+      [14, 50],
+      [22, 22],
+      [50, 50],
+    ];
+    const nodes = labels.map((label, index) => {
+      const position = positions[index] ?? [50, 50];
+      return makeNode(label, index, position[0], position[1], index === labels.length - 1 ? 'center' : undefined);
+    });
+    const edgeNodes = nodes.filter((node) => node.role !== 'center');
+    const edges = edgeNodes.map((node, index) => ({
+      from: node,
+      to: edgeNodes[(index + 1) % edgeNodes.length],
+      curved: true,
+    }));
+    if (nodes.some((node) => node.role === 'center')) {
+      const center = nodes.find((node) => node.role === 'center');
+      if (center) edges.push(...edgeNodes.slice(0, 4).map((node) => ({ from: node, to: center, curved: true })));
     }
-
-    const controlX = 96;
-    return [
-      `M ${start.x + horizontalOffset} ${start.y}`,
-      `C ${controlX} ${start.y}, ${controlX} ${end.y - verticalOffset}, ${end.x - horizontalOffset} ${end.y}`,
-    ].join(' ');
+    return { nodes, edges };
   }
 
+  if (kind === 'layered') {
+    const xPositions = [18, 50, 82];
+    const yPositions = [17, 50, 83];
+    const nodes = rows.flatMap((row, rowIndex) =>
+      row.map((label, colIndex) =>
+        makeNode(label, rows.slice(0, rowIndex).reduce((sum, current) => sum + current.length, 0) + colIndex, xPositions[colIndex] ?? 50, yPositions[rowIndex] ?? 50),
+      ),
+    );
+    const byPosition = (rowIndex: number, colIndex: number) =>
+      nodes.find((node) => node.step === rows.slice(0, rowIndex).reduce((sum, current) => sum + current.length, 0) + colIndex + 1);
+    const edges: DiagramEdge[] = [];
+    rows.forEach((row, rowIndex) => {
+      row.forEach((_, colIndex) => {
+        const from = byPosition(rowIndex, colIndex);
+        const to = rowIndex < rows.length - 1 ? byPosition(rowIndex + 1, colIndex) : undefined;
+        if (from && to) edges.push({ from, to });
+      });
+    });
+    rows.forEach((row, rowIndex) => {
+      row.slice(0, -1).forEach((_, colIndex) => {
+        const from = byPosition(rowIndex, colIndex);
+        const to = byPosition(rowIndex, colIndex + 1);
+        if (from && to) edges.push({ from, to });
+      });
+    });
+    return { nodes, edges };
+  }
+
+  if (kind === 'pipeline') {
+    const positions = [
+      [13, 28],
+      [38, 28],
+      [63, 28],
+      [87, 28],
+      [25, 62],
+      [50, 62],
+      [75, 62],
+      [38, 86],
+      [62, 86],
+    ];
+    const nodes = labels.map((label, index) => {
+      const position = positions[index] ?? [50, 50];
+      return makeNode(label, index, position[0], position[1], index > 6 ? 'support' : undefined);
+    });
+    const main = nodes.filter((node) => node.role !== 'support');
+    const edges: DiagramEdge[] = main.slice(0, -1).map((node, index) => ({ from: node, to: main[index + 1] }));
+    const supportAnchor = main[Math.max(main.length - 2, 0)];
+    edges.push(...nodes.filter((node) => node.role === 'support').map((node) => ({ from: supportAnchor, to: node, curved: true })));
+    return { nodes, edges };
+  }
+
+  const positions = [
+    [14, 20],
+    [50, 20],
+    [86, 20],
+    [86, 50],
+    [50, 50],
+    [14, 50],
+    [14, 80],
+    [50, 80],
+    [86, 80],
+  ];
+  const nodes = labels.map((label, index) => {
+    const position = positions[index] ?? [50, 50];
+    return makeNode(label, index, position[0], position[1]);
+  });
   const edges = nodes.slice(0, -1).map((node, index) => ({
-    id: `${node.id}-${nodes[index + 1].id}`,
-    path: edgePath(node, nodes[index + 1]),
+    from: node,
+    to: nodes[index + 1],
+    curved: node.y !== nodes[index + 1].y,
   }));
+  return { nodes, edges };
+}
+
+function Diagram({ rows, kind, focus }: { rows: string[][]; kind: DiagramKind; focus?: string }) {
+  const { nodes, edges } = buildDiagramLayout(rows, kind, focus);
 
   return (
-    <div className="diagram" aria-label="Architecture flow diagram">
+    <div className={`diagram diagram-${kind}`} aria-label={`${kind} architecture diagram`}>
       <svg className="diagram-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         <defs>
           <marker
@@ -114,18 +256,21 @@ function Diagram({ rows }: { rows: string[][] }) {
           </marker>
         </defs>
         {edges.map((edge) => (
-          <path d={edge.path} key={edge.id} markerEnd="url(#diagram-arrow)" />
+          <path
+            d={pathBetween(edge.from, edge.to, edge.curved)}
+            key={`${edge.from.id}-${edge.to.id}`}
+            markerEnd="url(#diagram-arrow)"
+          />
         ))}
       </svg>
       {nodes.map((node) => {
-        const center = point(node.rowIndex, node.colIndex);
         return (
           <div
-            className="diagram-node"
+            className={`diagram-node ${node.role ? `diagram-node-${node.role}` : ''}`}
             key={node.id}
             style={{
-              left: `${center.x}%`,
-              top: `${center.y}%`,
+              left: `${node.x}%`,
+              top: `${node.y}%`,
             }}
           >
             <span className="diagram-step">{node.step}</span>
@@ -517,7 +662,11 @@ function DetailPage({
               <h3>Failure modes</h3>
               <ul>{item.subsection.example.failureModes.map((point) => <li key={point}>{point}</li>)}</ul>
             </div>
-            <Diagram rows={item.subsection.example.diagram} />
+            <Diagram
+              rows={item.subsection.example.diagram}
+              kind={item.subsection.example.diagramKind}
+              focus={item.subsection.example.diagramFocus}
+            />
           </section>
         )}
 

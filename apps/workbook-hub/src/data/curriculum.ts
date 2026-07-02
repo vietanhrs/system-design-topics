@@ -1,9 +1,11 @@
-import type { Level, Priority, Subsection, WorkbookContent } from '@system-design/workbook';
+import type { DiagramKind, Level, Priority, Subsection, WorkbookContent } from '@system-design/workbook';
 
 type SubInput = Omit<Subsection, 'example' | 'exercise'> & {
   scenario: string;
   architecture: string[];
   diagram?: string[][];
+  diagramFocus?: string;
+  diagramKind?: DiagramKind;
   flow: string[];
   tradeoffs: string[];
   failureModes: string[];
@@ -345,11 +347,70 @@ const technologyNotes: Record<string, string[]> = {
   ],
 };
 
+const diagramKinds: Record<string, DiagramKind> = {
+  'problem-framing': 'flow',
+  'requirements-and-nfrs': 'layered',
+  'back-of-envelope-estimates': 'flow',
+  'api-contracts': 'flow',
+  'answer-pacing': 'cycle',
+  'sync-request-path': 'flow',
+  'async-pipelines': 'pipeline',
+  'cache-hierarchy': 'layered',
+  'partitioning-and-sharding': 'layered',
+  'search-index-read-models': 'pipeline',
+  'entity-modeling': 'hub',
+  'database-choice': 'layered',
+  'transactions-idempotency-outbox': 'flow',
+  'cdc-event-sourcing': 'pipeline',
+  'consistency-models': 'layered',
+  'social-graph-model': 'layered',
+  'mutual-candidate-generation': 'pipeline',
+  'ranking-feature-store': 'hub',
+  'serving-suggestions': 'flow',
+  'privacy-safety-filters': 'hub',
+  'full-case-study': 'pipeline',
+  'notification-system': 'pipeline',
+  'chat-messaging': 'pipeline',
+  'news-feed': 'pipeline',
+  'search-autocomplete': 'pipeline',
+  'rate-limiter': 'hub',
+  'media-upload': 'pipeline',
+  'slo-latency-budgets': 'cycle',
+  'load-balancing-autoscaling-backpressure': 'hub',
+  'graceful-degradation': 'cycle',
+  observability: 'hub',
+  'multi-region-dr': 'layered',
+  'auth-sessions': 'layered',
+  'authorization-acl': 'hub',
+  'pii-data-handling': 'flow',
+  'abuse-spam-controls': 'hub',
+  'secure-apis-secrets': 'layered',
+  'master-answer-template': 'flow',
+  'system-design-checklist': 'flow',
+  'whiteboard-patterns': 'cycle',
+  'follow-up-questions': 'hub',
+  'practice-rubric': 'cycle',
+};
+
+const diagramFocus: Record<string, string> = {
+  'entity-modeling': 'Owner service',
+  'ranking-feature-store': 'Ranker',
+  'privacy-safety-filters': 'Safety classifier',
+  'rate-limiter': 'Limiter middleware',
+  'load-balancing-autoscaling-backpressure': 'Backpressure',
+  observability: 'Trace spans',
+  'authorization-acl': 'Policy engine',
+  'abuse-spam-controls': 'Rules/ML scorer',
+  'follow-up-questions': 'Clarify axis',
+};
+
 function sub(input: SubInput): Subsection {
   const {
     scenario,
     architecture,
     diagram,
+    diagramFocus: inputDiagramFocus,
+    diagramKind,
     flow,
     tradeoffs,
     failureModes,
@@ -362,7 +423,16 @@ function sub(input: SubInput): Subsection {
   return {
     ...rest,
     theory: [...rest.theory, ...(technologyNotes[rest.id] ?? [])],
-    example: { scenario, architecture, diagram: diagram ?? diagrams[rest.id] ?? fallbackDiagram, flow, tradeoffs, failureModes },
+    example: {
+      scenario,
+      architecture,
+      diagram: diagram ?? diagrams[rest.id] ?? fallbackDiagram,
+      diagramFocus: inputDiagramFocus ?? diagramFocus[rest.id],
+      diagramKind: diagramKind ?? diagramKinds[rest.id] ?? 'flow',
+      flow,
+      tradeoffs,
+      failureModes,
+    },
     exercise: { prompt, tasks, expected },
   };
 }

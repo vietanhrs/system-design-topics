@@ -1,5 +1,6 @@
 export { WorkbookApp } from './WorkbookApp';
 export type {
+  DiagramKind,
   ExampleSection,
   ExerciseSection,
   Level,
@@ -7,4 +8,3 @@ export type {
   Subsection,
   WorkbookContent,
 } from './types';
-

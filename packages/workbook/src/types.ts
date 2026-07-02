@@ -1,9 +1,12 @@
 export type Priority = 'P0' | 'P1' | 'P2';
+export type DiagramKind = 'cycle' | 'flow' | 'hub' | 'layered' | 'pipeline';
 
 export interface ExampleSection {
   scenario: string;
   architecture: string[];
   diagram: string[][];
+  diagramFocus?: string;
+  diagramKind: DiagramKind;
   flow: string[];
   tradeoffs: string[];
   failureModes: string[];
