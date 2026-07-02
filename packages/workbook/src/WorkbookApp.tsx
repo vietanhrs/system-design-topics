@@ -57,19 +57,82 @@ function iconForLevel(order: number) {
 }
 
 function Diagram({ rows }: { rows: string[][] }) {
+  const nodes = rows.flatMap((row, rowIndex) =>
+    row.map((label, colIndex) => ({
+      id: `${rowIndex}-${colIndex}-${label}`,
+      label,
+      rowIndex,
+      colIndex,
+      step: rows.slice(0, rowIndex).reduce((sum, current) => sum + current.length, 0) + colIndex + 1,
+    })),
+  );
+  const maxCols = Math.max(...rows.map((row) => row.length), 1);
+  const maxRows = Math.max(rows.length, 1);
+
+  function point(rowIndex: number, colIndex: number) {
+    return {
+      x: ((colIndex + 0.5) / maxCols) * 100,
+      y: ((rowIndex + 0.5) / maxRows) * 100,
+    };
+  }
+
+  function edgePath(from: (typeof nodes)[number], to: (typeof nodes)[number]) {
+    const start = point(from.rowIndex, from.colIndex);
+    const end = point(to.rowIndex, to.colIndex);
+    const horizontalOffset = 15;
+    const verticalOffset = 7;
+
+    if (from.rowIndex === to.rowIndex) {
+      return `M ${start.x + horizontalOffset} ${start.y} L ${end.x - horizontalOffset} ${end.y}`;
+    }
+
+    const controlX = 96;
+    return [
+      `M ${start.x + horizontalOffset} ${start.y}`,
+      `C ${controlX} ${start.y}, ${controlX} ${end.y - verticalOffset}, ${end.x - horizontalOffset} ${end.y}`,
+    ].join(' ');
+  }
+
+  const edges = nodes.slice(0, -1).map((node, index) => ({
+    id: `${node.id}-${nodes[index + 1].id}`,
+    path: edgePath(node, nodes[index + 1]),
+  }));
+
   return (
-    <div className="diagram" aria-label="Architecture pattern diagram">
-      {rows.map((row, rowIndex) => (
-        <div className="diagram-row" key={row.join('-')}>
-          {row.map((node, index) => (
-            <div className="diagram-node" key={node}>
-              <span>{node}</span>
-              {index < row.length - 1 && <ArrowRight size={16} aria-hidden />}
-            </div>
-          ))}
-          {rowIndex < rows.length - 1 && <div className="diagram-drop" />}
-        </div>
-      ))}
+    <div className="diagram" aria-label="Architecture flow diagram">
+      <svg className="diagram-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+        <defs>
+          <marker
+            id="diagram-arrow"
+            markerHeight="5"
+            markerWidth="5"
+            orient="auto"
+            refX="4"
+            refY="2.5"
+          >
+            <path d="M 0 0 L 5 2.5 L 0 5 z" />
+          </marker>
+        </defs>
+        {edges.map((edge) => (
+          <path d={edge.path} key={edge.id} markerEnd="url(#diagram-arrow)" />
+        ))}
+      </svg>
+      {nodes.map((node) => {
+        const center = point(node.rowIndex, node.colIndex);
+        return (
+          <div
+            className="diagram-node"
+            key={node.id}
+            style={{
+              left: `${center.x}%`,
+              top: `${center.y}%`,
+            }}
+          >
+            <span className="diagram-step">{node.step}</span>
+            <span>{node.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
